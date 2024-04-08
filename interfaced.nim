@@ -48,7 +48,7 @@ macro implementInterface*(interfaceName: typed, exports: static[bool]) : untyped
     let
       methodName = identDefs[0]
       params = identDefs[1][0]
-      thisParameter = params[1][0]
+      thisParameter = ident($params[1][0])
 
       testThis = newIdentNode("x")
       lambdaBody = quote do:
@@ -61,8 +61,8 @@ macro implementInterface*(interfaceName: typed, exports: static[bool]) : untyped
       let param = params[i]
       param.expectKind(nnkIdentDefs)
       for j in 0 .. len(param) - 3:
-        lambdaBody.add param[j]
-        recursiveTest.add param[j]
+        lambdaBody.add ident($param[j]) # Do not add symbols we do not own them
+        recursiveTest.add ident($param[j])
 
     methodName.expectKind nnkIdent
 
@@ -71,11 +71,17 @@ macro implementInterface*(interfaceName: typed, exports: static[bool]) : untyped
       when not(compiles(`recursiveTest`)):
         {.fatal: "recursive call".}
 
+    let realParams = params.copyNimTree() # We need to remove symbols
+    for def in realParams:
+      for i in 0..<def.len - 1:
+        def[i] = ident($def[i])
+
+
     objectConstructor.add nnkExprColonExpr.newTree(
       methodName,
       nnkLambda.newTree(
         newEmptyNode(),newEmptyNode(),newEmptyNode(),
-        params.copy,
+        realParams,
         newEmptyNode(),newEmptyNode(),
         newStmtList(
           nnkMixinStmt.newTree(methodName),
@@ -150,7 +156,7 @@ macro createInterface*(name : untyped, methods : untyped) : untyped =
       methodIdent = if meth[0].kind == nnkPostfix: meth[0][1] else: meth[0]
       params = meth[3]
       thisParam = params[1]
-      thisIdent = thisParam[0]
+      thisIdent = ident($thisParam[0])
       thisType  = thisParam[1]
 
     if thisType != cleanedName:
